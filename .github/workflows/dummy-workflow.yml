@@ -1,0 +1,51 @@
+name: Workflow A
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate work
+        run: echo "Workflow A finished OK"
+  trigger_repo_b:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Workflow B via repository_dispatch
+        env:
+          GH_TOKEN_REPO_B: ${{ secrets.REPO_B_DISPATCH_TOKEN }}
+          REPO_B_OWNER: crazyToster777
+          REPO_B_NAME: node-backend
+        run: |
+          set -euo pipefail
+
+          API="https://api.github.com/repos/${REPO_B_OWNER}/${REPO_B_NAME}/dispatches"
+
+          PAYLOAD=$(cat <<'JSON'
+          {
+            "event_type": "trigger-workflow-b",
+            "client_payload": {
+              "source_repo": "__SOURCE_REPO__",
+              "source_run_id": "__RUN_ID__",
+              "ref": "__REF__",
+              "sha": "__SHA__",
+              "test_type": "smoke"
+            }
+          }
+          JSON
+          )
+
+          PAYLOAD="${PAYLOAD/__SOURCE_REPO__/${GITHUB_REPOSITORY}}"
+          PAYLOAD="${PAYLOAD/__RUN_ID__/${GITHUB_RUN_ID}}"
+          PAYLOAD="${PAYLOAD/__REF__/${GITHUB_REF}}"
+          PAYLOAD="${PAYLOAD/__SHA__/${GITHUB_SHA}}"
+
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN_REPO_B}" \
+            "${API}" \
+            -d "${PAYLOAD}"
+
+          echo "Dispatched to ${REPO_B_OWNER}/${REPO_B_NAME}"
